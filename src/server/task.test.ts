@@ -36,6 +36,16 @@ describe("task.create", () => {
       message: "O título é obrigatório.",
     });
   });
+
+  // Zod rejects a title that is not a string, before a task is stored.
+  it("rejects a non-string title", async () => {
+    await expect(
+      caller().task.create({ titulo: 12 as never }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    const page = await caller().task.list();
+    expect(page.items).toHaveLength(0);
+  });
 });
 
 describe("task.list", () => {
