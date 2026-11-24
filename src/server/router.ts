@@ -69,8 +69,10 @@ const taskRouter = t.router({
     }),
 });
 
-export const createCaller = t.createCallerFactory(
-  t.router({
-    task: taskRouter,
-  }),
-);
+export const appRouter = t.router({
+  task: taskRouter,
+});
+
+export type AppRouter = typeof appRouter;
+
+export const createCaller = t.createCallerFactory(appRouter);

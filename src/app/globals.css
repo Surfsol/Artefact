@@ -46,6 +46,15 @@ h1 {
   margin-bottom: 1rem;
 }
 
+p,
+ul {
+  margin-top: 1rem;
+}
+
+li + li {
+  margin-top: 0.5rem;
+}
+
 @media (prefers-color-scheme: dark) {
   html {
     color-scheme: dark;
