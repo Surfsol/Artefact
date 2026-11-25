@@ -3,15 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { Task } from "@/server/store";
+import type { TaskPage } from "@/types";
 import { useTRPC } from "@/lib/trpc/client";
 
 const SUCCESS_BANNER_MS = 4000;
-
-type TaskPage = {
-  items: Task[];
-  nextCursor: string | null;
-};
 
 // UTC keeps the server HTML and the hydrated client on the same clock.
 const createdAtFormat = new Intl.DateTimeFormat("pt-BR", {
