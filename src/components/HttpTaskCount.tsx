@@ -1,9 +1,11 @@
 "use client";
 
-import { trpc } from "@/lib/trpc/client";
+import { useQuery } from "@tanstack/react-query";
+import { useTRPC } from "@/lib/trpc/client";
 
 export function HttpTaskCount() {
-  const list = trpc.task.list.useQuery();
+  const trpc = useTRPC();
+  const list = useQuery(trpc.task.list.queryOptions());
 
   if (list.isLoading) {
     return <p>Carregando…</p>;
