@@ -19,7 +19,7 @@ export function TaskForm({ task }: { task?: FormTask }) {
 
   async function returnHome() {
     await queryClient.invalidateQueries({
-      ...trpc.task.list.queryFilter(),
+      ...trpc.task.list.infiniteQueryFilter(),
       refetchType: "all",
     });
     router.push("/");

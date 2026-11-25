@@ -24,6 +24,17 @@ const harness = vi.hoisted(() => ({
   },
   mutate: vi.fn(),
   invalidateQueries: vi.fn(async () => {}),
+  fetchNextPage: vi.fn(),
+  isFetchingNextPage: false,
+  extraPages: [] as Array<{
+    items: Array<{
+      id: string;
+      titulo: string;
+      descricao?: string;
+      dataCriacao: number;
+    }>;
+    nextCursor: string | null;
+  }>,
 }));
 
 vi.mock("next/link", () => ({
@@ -37,6 +48,8 @@ vi.mock("@/lib/trpc/client", () => ({
       list: {
         queryOptions: () => ({}),
         queryFilter: () => ({}),
+        infiniteQueryOptions: () => ({}),
+        infiniteQueryFilter: () => ({}),
       },
       delete: {
         mutationOptions: (options: typeof harness.mutationOptions) => options,
@@ -46,7 +59,15 @@ vi.mock("@/lib/trpc/client", () => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({ data: harness.queryData }),
+  useInfiniteQuery: () => {
+    const pages = [harness.queryData, ...harness.extraPages];
+    return {
+      data: { pages, pageParams: [null] },
+      hasNextPage: Boolean(pages[pages.length - 1]?.nextCursor),
+      isFetchingNextPage: harness.isFetchingNextPage,
+      fetchNextPage: harness.fetchNextPage,
+    };
+  },
   useQueryClient: () => ({ invalidateQueries: harness.invalidateQueries }),
   useMutation: (options: typeof harness.mutationOptions) => {
     harness.mutationOptions = options;
@@ -77,11 +98,30 @@ const page = {
 
 beforeEach(() => {
   harness.queryData = page;
+  harness.extraPages = [];
+  harness.isFetchingNextPage = false;
   harness.mutationOptions = {};
   harness.mutationState = { isPending: false, variables: undefined };
   harness.mutate.mockReset();
+  harness.fetchNextPage.mockReset();
   harness.invalidateQueries.mockClear();
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      constructor(callback: IntersectionObserverCallback) {
+        intersection = callback;
+      }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+      takeRecords() {
+        return [];
+      }
+    },
+  );
 });
+
+let intersection: IntersectionObserverCallback = () => {};
 
 describe("TaskList", () => {
   it("renders titles, a description when present, and the creation time", () => {
@@ -95,6 +135,42 @@ describe("TaskList", () => {
     expect(within(rows[1]).getByRole("heading", { name: "Sem descrição" })).toBeInTheDocument();
     expect(within(rows[1]).queryByText("Na padaria")).not.toBeInTheDocument();
     expect(within(rows[1]).getByText(/Criada em/)).toBeInTheDocument();
+    expect(screen.queryByText("Carregando…")).not.toBeInTheDocument();
+  });
+
+  it("shows tasks from the next page and asks for another when the sentinel is visible", () => {
+    harness.queryData = { ...page, nextCursor: "b" };
+    harness.extraPages = [
+      {
+        items: [
+          {
+            id: "c",
+            titulo: "Segunda página",
+            dataCriacao: Date.UTC(2026, 10, 25, 10, 0),
+          },
+        ],
+        nextCursor: null,
+      },
+    ];
+    render(<TaskList initialPage={page} />);
+
+    expect(screen.getByRole("heading", { name: "Segunda página" })).toBeInTheDocument();
+    expect(screen.queryByText("Carregando…")).not.toBeInTheDocument();
+  });
+
+  it("shows a loading line and requests the next page while more tasks remain", () => {
+    harness.queryData = { ...page, nextCursor: "b" };
+    harness.isFetchingNextPage = true;
+    render(<TaskList initialPage={page} />);
+
+    expect(screen.getByText("Carregando…")).toBeInTheDocument();
+
+    harness.isFetchingNextPage = false;
+    render(<TaskList initialPage={{ ...page, nextCursor: "b" }} />);
+    act(() => {
+      intersection([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+    expect(harness.fetchNextPage).toHaveBeenCalled();
   });
 
   it("deletes the clicked task and shows its title", async () => {

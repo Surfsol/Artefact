@@ -35,7 +35,7 @@ const taskRouter = t.router({
     .input(
       z
         .object({
-          cursor: z.string().optional(),
+          cursor: z.string().nullish(),
           limit: z.number().int().positive().optional(),
         })
         .optional(),

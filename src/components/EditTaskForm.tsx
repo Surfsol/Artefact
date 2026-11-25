@@ -14,8 +14,15 @@ export function EditTaskForm({ id }: { id: string }) {
   const [task, setTask] = useState<FormTask | null | undefined>(undefined);
 
   useEffect(() => {
-    const pages = queryClient.getQueriesData<TaskPage>(trpc.task.list.queryFilter());
-    const found = pages.flatMap(([, data]) => data?.items ?? []).find((item) => item.id === id);
+    const listed = queryClient.getQueriesData<TaskPage>(trpc.task.list.queryFilter());
+    const paged = queryClient.getQueriesData<{ pages: TaskPage[] }>(
+      trpc.task.list.infiniteQueryFilter(),
+    );
+    const items = [
+      ...listed.flatMap(([, data]) => data?.items ?? []),
+      ...paged.flatMap(([, data]) => data?.pages?.flatMap((page) => page.items) ?? []),
+    ];
+    const found = items.find((item) => item.id === id);
     setTask(found ?? null);
   }, [id, queryClient, trpc]);
 
