@@ -91,6 +91,7 @@ describe("task.list", () => {
     seedTasks(25);
 
     const ids: string[] = [];
+    const titles: string[] = [];
     let cursor: string | undefined;
     let lastPageSize = 0;
 
@@ -98,12 +99,16 @@ describe("task.list", () => {
       const page = await caller().task.list({ cursor, limit: 10 });
       lastPageSize = page.items.length;
       ids.push(...page.items.map((task) => task.id));
+      titles.push(...page.items.map((task) => task.titulo));
       cursor = page.nextCursor ?? undefined;
     } while (cursor);
 
     expect(ids).toHaveLength(25);
     expect(new Set(ids).size).toBe(25);
     expect(lastPageSize).toBe(5);
+    expect(titles[0]).toBe("Tarefa 25");
+    expect(titles[9]).toBe("Tarefa 16");
+    expect(titles.at(-1)).toBe("Tarefa 1");
   });
 });
 
