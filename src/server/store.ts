@@ -1,9 +1,4 @@
-export type Task = {
-  id: string;
-  titulo: string;
-  descricao?: string;
-  dataCriacao: number;
-};
+import type { Task } from "@/types";
 
 // seq is only used in the store. It orders tasts created within same millisecond. 
 type StoredTask = Task & { seq: number };
