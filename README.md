@@ -1,36 +1,28 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Artefact
 
-## Getting Started
+An in-memory task list. Next.js App Router, tRPC, and plain CSS. No database, no auth, no component library. Fields are `id`, `titulo`, `descricao`, and `dataCriacao`. Labels and errors on the screen are Portuguese.
 
-First, run the development server:
+## Run it
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- `npm install`
+- `npm run dev`, then open `http://localhost:3000`
+- `npm test`
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## How it works
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- A fresh process seeds 25 tasks, `Tarefa 1` through `Tarefa 25`. `Tarefa 25` is newest, so the first page is `Tarefa 25`–`Tarefa 16`. Odd-numbered titles have a description. In [src/server/store.ts](src/server/store.ts), `dataCriacao` is `now - (count - 1 - index)` so the highest number is the most recent.
+- The list lives only in the memory of the running Node process, in the array `globalThis.__artefactTasks`. `npm run dev` starts that process. Ctrl+C, closing the terminal, or restarting the dev server ends it. Nothing is written to a file or a database, so the tasks from that run are gone. The next start has no list yet, so it seeds `Tarefa 1` through `Tarefa 25` again. Refreshing the browser does not stop the process, so the same list is still there. Any change to the list, including a create, edit, or delete, stays until the next restart.
+- The home page, `/`, is built on the server before the browser receives it. The server reads the first 10 tasks from `globalThis.__artefactTasks` and puts them in the HTML, so those tasks are already on the page when it opens. That read uses `createCaller` in [src/lib/trpc/server.ts](src/lib/trpc/server.ts), which calls the task list directly inside the server process.
+- To create, edit, delete, or load the next page the browser calls `/api/trpc`. `/api/trpc` is not a page. It is the HTTP route in [src/app/api/trpc/[trpc]/route.ts](src/app/api/trpc/[trpc]/route.ts). The path after `/api/trpc` names the procedure, such as `task.list` or `task.delete` (for example, `http://localhost:3000/api/trpc/task.delete`). These browser calls read from and write to the same array as the home page. That array is stored in the server's memory under the name `globalThis.__artefactTasks`.
+- `/new` is the page for a new task. The browser checks the title before it sends anything. A blank title shows “O título é obrigatório.” and never calls the server. A title with text is saved, and the browser returns to the home page.
+- **Editar** on a row opens `/task/[id]` for that task. The form is filled from the list already on the screen, including tasks that arrived by scrolling. Saving changes the title and description and returns to the home page. The creation time stays the same. Typing `/task/[id]` into the address bar, or refreshing that page, starts with an empty list on the screen. The form has nothing to fill in, so the page shows **Tarefa não encontrada**, even when that task is still in `globalThis.__artefactTasks`.
+- The home page starts with the first 10 tasks, `Tarefa 25`–`Tarefa 16`. A marker under the list asks for the next 10 when it scrolls into view. `nextCursor` is the id of the last task on the page just loaded, so the next call starts after that task. With the 25 seeded tasks this loads `Tarefa 15`–`Tarefa 6`, then `Tarefa 5`–`Tarefa 1`. The last page has no further task, so `nextCursor` is absent and loading stops. The line **Carregando…** shows only while that request is still running.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Decisions
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- The list is one array, `globalThis.__artefactTasks`, in [src/server/store.ts](src/server/store.ts). Next can load that file twice in the same process, once for the home page and once for `/api/trpc`. A normal array at the top of the file would then be two arrays, so the home page could show one list while create, edit, and delete changed the other. `globalThis` is shared by the whole process, so both copies of the file read and write the same array.
+- Each task also keeps a private `seq`. `dataCriacao` is a millisecond, so two tasks created in the same millisecond would look equally new. `seq` counts up by one for every task, and the sort uses it only when the times match. The later task is the more recent one, so it stays above the other. `seq` is removed before a task leaves the store, so the page and `/api/trpc` never receive it.
+- The home page and the browser use the same task procedures. The home page is already running on the server, so `createCaller` in [src/lib/trpc/server.ts](src/lib/trpc/server.ts) calls `task.list` directly inside that process. It does not send a request to `/api/trpc`. The browser cannot call that function, so create, edit, delete, and later pages go through `/api/trpc`, which runs those same procedures.
+- `task.list` in [src/server/router.ts](src/server/router.ts) returns 10 tasks at a time, newest at the top. The first 10 go into the home page. [src/components/TaskList.tsx](src/components/TaskList.tsx) keeps the id of the last task on that page as `nextCursor` and asks for the next 10 when the reader reaches the bottom. When no further task remains, `nextCursor` is absent and loading stops. Ten at a time keeps the first page small and lets the rest arrive as the reader scrolls.
+- The creation time in [src/components/TaskList.tsx](src/components/TaskList.tsx) uses `pt-BR` with `timeZone: "UTC"`. The server builds the list HTML, then the browser re-renders it. A local timezone can turn the same `dataCriacao` into two different strings, and React rejects that mismatch. UTC keeps one clock, so both sides print the same text. `pt-BR` only sets the Brazilian date layout. A task created at 14:00 in São Paulo (UTC−3) is shown as 17:00.
+- There is no spinner while **Nova tarefa** or **Editar** opens. The pause on the first click happens only while `npm run dev` is running. Next compiles that page the first time and keeps the current page on screen until the compile finishes. A production build does not compile on click, so that pause is gone. The challenge does not ask for a loading page, and the remaining request is short because the list is in memory.

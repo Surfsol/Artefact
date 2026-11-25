@@ -36,7 +36,8 @@ export function seedTasks(count: number) {
       titulo: `Tarefa ${index + 1}`,
       // Even tasks carry a description so the list shows both row shapes.
       descricao: index % 2 === 0 ? `Descrição da tarefa ${index + 1}` : undefined,
-      dataCriacao: now - index,
+      // The highest number is the newest, so Tarefa 25 is first.
+      dataCriacao: now - (count - 1 - index),
       seq: nextSeq(),
     });
   }
