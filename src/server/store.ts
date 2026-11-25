@@ -25,7 +25,7 @@ function nextSeq(): number {
   return globalStore.__artefactTaskSeq;
 }
 
-// only used for testing
+// Tests call this directly. seedTasks uses it before filling a fresh list.
 export function resetTasks() {
   globalStore.__artefactTasks = [];
   globalStore.__artefactTaskSeq = 0;
@@ -39,11 +39,17 @@ export function seedTasks(count: number) {
     tasks().push({
       id: crypto.randomUUID(),
       titulo: `Tarefa ${index + 1}`,
-      descricao: "",
+      // Even tasks carry a description so the list shows both row shapes.
+      descricao: index % 2 === 0 ? `Descrição da tarefa ${index + 1}` : undefined,
       dataCriacao: now - index,
       seq: nextSeq(),
     });
   }
+}
+
+// A restart has no list yet. An empty list after deletes stays empty.
+if (!globalStore.__artefactTasks) {
+  seedTasks(25);
 }
 
 // Descending order by dataCriacao, or by seq when dataCriacao a and b are the same.
