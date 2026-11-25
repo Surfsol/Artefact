@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { TaskPage } from "@/types";
@@ -23,7 +23,41 @@ export function TaskList({ initialPage }: { initialPage: TaskPage }) {
   const deletedTitle = useRef<string | null>(null);
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const list = useQuery(trpc.task.list.queryOptions({ limit: 10 }, { initialData: initialPage }));
+  const list = useInfiniteQuery(
+    trpc.task.list.infiniteQueryOptions(
+      { limit: 10 },
+      {
+        // null is the first page. The next call starts after nextCursor.
+        initialCursor: null,
+        initialData: {
+          pages: [initialPage],
+          pageParams: [null],
+        },
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+      },
+    ),
+  );
+  const hasNextPage = list.hasNextPage;
+  const isFetchingNextPage = list.isFetchingNextPage;
+  const fetchNextPage = list.fetchNextPage;
+  const pageCount = list.data?.pages.length ?? 0;
+  const sentinel = useRef<HTMLDivElement>(null);
+
+  // The sentinel asks for the next page of 10 when it scrolls into view.
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node || !hasNextPage) {
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting) && !isFetchingNextPage) {
+        void fetchNextPage();
+      }
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, pageCount]);
 
   useEffect(() => {
     return () => {
@@ -51,7 +85,7 @@ export function TaskList({ initialPage }: { initialPage: TaskPage }) {
         if (titulo) {
           showDeleted(titulo);
         }
-        await queryClient.invalidateQueries(trpc.task.list.queryFilter());
+        await queryClient.invalidateQueries(trpc.task.list.infiniteQueryFilter());
       },
       onError: (error) => {
         if (bannerTimer.current) {
@@ -63,7 +97,7 @@ export function TaskList({ initialPage }: { initialPage: TaskPage }) {
     }),
   );
 
-  const items = list.data?.items ?? [];
+  const items = list.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <>
@@ -105,6 +139,8 @@ export function TaskList({ initialPage }: { initialPage: TaskPage }) {
           })}
         </ul>
       )}
+      {hasNextPage ? <div className="task-sentinel" ref={sentinel} /> : null}
+      {isFetchingNextPage ? <p>Carregando…</p> : null}
     </>
   );
 }

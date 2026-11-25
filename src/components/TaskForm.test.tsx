@@ -41,7 +41,10 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/trpc/client", () => ({
   useTRPC: () => ({
     task: {
-      list: { queryFilter: () => ({}) },
+      list: {
+        queryFilter: () => ({}),
+        infiniteQueryFilter: () => ({}),
+      },
       create: {
         mutationOptions: (options: typeof harness.createOptions) => options,
       },
